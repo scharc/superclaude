@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# superclaude - Claude Code with tmux session management
+# Inspired by agentbox session management
+
+set -euo pipefail
+
+CLAUDE_CMD="claude --dangerously-skip-permissions"
+SESSION_PREFIX="sc"
+
+# --- helpers ---
+
+slug() {
+    local path="${1:-$(pwd)}"
+    echo "${SESSION_PREFIX}|${path}"
+}
+
+list_sessions() {
+    local base_name
+    base_name="$(slug)"
+    tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -x "${base_name}\(-[0-9]\+\)\?" || true
+}
+
+next_session_name() {
+    local base_name
+    base_name="$(slug)"
+    local existing
+    existing="$(list_sessions)"
+
+    # If base session doesn't exist, use it
+    if ! echo "$existing" | grep -qx "$base_name"; then
+        echo "$base_name"
+        return
+    fi
+
+    # Find next available number
+    local i=2
+    while echo "$existing" | grep -qx "${base_name}-${i}"; do
+        ((i++))
+    done
+    echo "${base_name}-${i}"
+}
+
+usage() {
+    cat <<'EOF'
+superclaude - Claude Code with tmux session management
+
+Usage:
+  superclaude              Attach to existing session or create one
+  superclaude new          Create a new session (auto-numbered)
+  superclaude list         List sessions for current directory
+  superclaude list all     Interactive picker (fzf) over ALL sc sessions
+  superclaude attach NAME  Attach to a specific session
+  superclaude kill NAME    Kill a specific session
+  superclaude help         Show this help
+
+Any other arguments are passed directly to claude.
+EOF
+}
+
+pick_and_attach_all() {
+    # One row per session: first active pane (lowest window_index — base-index aware).
+    # pane_title carries Claude Code's conversation summary; pane_current_path is the
+    # real cwd (more accurate than parsing the -N suffix off the slug).
+    local rows
+    rows="$(tmux list-panes -a \
+        -F $'#{session_name}\t#{pane_active}\t#{session_attached}\t#{session_activity}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_title}' \
+        2>/dev/null \
+        | awk -F'\t' -v p="^${SESSION_PREFIX}\\|" '$1 ~ p && $2=="1" && !seen[$1]++' \
+        | sort -t$'\t' -k4 -nr || true)"
+
+    if [[ -z "$rows" ]]; then
+        echo "No superclaude sessions running"
+        return 0
+    fi
+
+    if ! command -v fzf >/dev/null 2>&1; then
+        echo "fzf not installed; sessions:" >&2
+        echo "$rows" | cut -f1
+        return 1
+    fi
+
+    local selected=""
+    selected="$(
+        while IFS=$'\t' read -r name pactive attached activity cmd cwd title; do
+            local marker=" "
+            [[ "$attached" != "0" ]] && marker="●"
+            local ts
+            ts="$(date -d "@$activity" '+%m-%d %H:%M' 2>/dev/null || echo '-----')"
+            # If claude isn't the foreground process, mark the row so it's obvious.
+            local label="$title"
+            [[ "$cmd" != "claude" ]] && label="[${cmd}] ${title}"
+            printf '%s\t%s  %s  %-50.50s  %s\n' "$name" "$marker" "$ts" "$label" "$cwd"
+        done <<< "$rows" \
+        | fzf --with-nth=2.. --delimiter=$'\t' \
+              --prompt='session> ' --header='● attached   enter: attach   esc: cancel' \
+              --height=60% --reverse --no-multi \
+        | cut -f1
+    )" || selected=""
+
+    if [[ -n "$selected" ]]; then
+        exec tmux attach-session -t "=$selected"
+    fi
+}
+
+create_and_attach() {
+    local session_name="$1"
+    tmux new-session -d -s "$session_name" -c "$(pwd)" "$CLAUDE_CMD"
+    echo "Created session: $session_name"
+    exec tmux attach-session -t "=$session_name"
+}
+
+# --- main ---
+
+case "${1:-}" in
+    "")
+        # No args: attach to existing session or create one
+        existing="$(list_sessions | head -1)"
+        if [[ -n "$existing" ]]; then
+            echo "Attaching to: $existing"
+            exec tmux attach-session -t "=$existing"
+        else
+            create_and_attach "$(slug)"
+        fi
+        ;;
+    new)
+        session_name="$(next_session_name)"
+        create_and_attach "$session_name"
+        ;;
+    list)
+        if [[ "${2:-}" == "all" ]]; then
+            pick_and_attach_all
+        else
+            sessions="$(list_sessions)"
+            if [[ -z "$sessions" ]]; then
+                echo "No sessions for $(pwd)"
+            else
+                echo "Sessions for $(pwd):"
+                echo "$sessions"
+            fi
+        fi
+        ;;
+    attach)
+        if [[ -z "${2:-}" ]]; then
+            echo "Usage: superclaude attach SESSION_NAME"
+            exit 1
+        fi
+        exec tmux attach-session -t "=$2"
+        ;;
+    kill)
+        if [[ -z "${2:-}" ]]; then
+            echo "Usage: superclaude kill SESSION_NAME"
+            exit 1
+        fi
+        tmux kill-session -t "=$2"
+        echo "Killed session: $2"
+        ;;
+    help|--help|-h)
+        usage
+        ;;
+    *)
+        # Pass everything through to claude
+        exec $CLAUDE_CMD "$@"
+        ;;
+esac
