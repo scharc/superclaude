@@ -32,6 +32,41 @@ sc <N>                   attach to row N (most-recent first)
 
 The picker shows `idx ●/· age  title  ·  dir` per row — `●` = attached, `·` = idle.
 
+## tmux integration
+
+Open the `sc` picker as a tmux popup, with the absolute path resolved at
+load-time so it works even if `sc` isn't on the tmux server's `$PATH`.
+
+Add one line to `~/.tmux.conf`:
+
+```tmux
+run-shell '/path/to/superclaude/sc.tmux'
+```
+
+Or via [TPM](https://github.com/tmux-plugins/tpm):
+
+```tmux
+set -g @plugin 'scharc/superclaude'
+```
+
+This registers a `sc-popup` command-alias. Use it anywhere a tmux command
+is expected:
+
+```tmux
+bind-key C-s sc-popup
+
+# or from a display-menu:
+bind-key -n F1 display-menu 'Sessions' s sc-popup ...
+```
+
+Optional config (set before the `run-shell` line):
+
+```tmux
+set -g @sc-key 'C-s'        # also auto-bind a key
+set -g @sc-popup-width  90% # popup size (default 90%)
+set -g @sc-popup-height 90%
+```
+
 ## Notes
 
 - Sessions are launched with `claude --dangerously-skip-permissions`. Edit `CLAUDE_CMD` in `bin/superclaude` if you want different defaults.
