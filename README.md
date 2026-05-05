@@ -1,9 +1,13 @@
 # superclaude
 
-Claude Code with tmux session management. Two scripts:
+Claude Code with tmux session management. One sticky session per project,
+plus a touch-friendly picker that drops into a tmux popup so you can
+switch sessions from a phone without chording `prefix` keys.
+
+Two scripts:
 
 - **`superclaude`** — full CLI: create / list / attach / kill named tmux sessions running `claude`. Session names are derived from `$PWD` so each project gets its own sticky session. `superclaude list all` opens an `fzf` picker over every session.
-- **`sc`** — short, mobile-friendly wrapper around the same session pool. `sc` opens an `fzf` picker filling the screen, with "+ new session" pinned at the top. `sc n` creates new, `sc <N>` attaches by row index.
+- **`sc`** — short, mobile-friendly wrapper around the same session pool. `sc` opens an `fzf` picker filling the screen, with "+ new session" pinned at the top. `sc n` creates new, `sc <N>` attaches by row index. Pairs with [`sc.tmux`](#tmux-integration) for one-tap session switching from inside tmux.
 
 ## Install
 
