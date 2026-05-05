@@ -8,6 +8,16 @@ set -euo pipefail
 
 SESSION_PREFIX="sc"
 
+attach_or_switch() {
+    # switch-client when inside tmux (e.g. invoked from display-popup),
+    # attach-session otherwise.
+    if [[ -n "${TMUX:-}" ]]; then
+        exec tmux switch-client -t "=$1"
+    else
+        exec tmux attach-session -t "=$1"
+    fi
+}
+
 list_rows() {
     tmux list-panes -a \
         -F $'#{session_name}\t#{pane_active}\t#{session_attached}\t#{session_activity}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_title}' \
@@ -43,7 +53,7 @@ attach_nth() {
         echo "no session #$n" >&2
         return 1
     fi
-    exec tmux attach-session -t "=$name"
+    attach_or_switch "$name"
 }
 
 build_menu() {
@@ -52,7 +62,7 @@ build_menu() {
     local i=0
     while IFS=$'\t' read -r name pactive attached activity cmd cwd title; do
         [[ -z "$name" ]] && continue
-        ((i++))
+        i=$((i+1))
         local marker="·"
         [[ "$attached" != "0" ]] && marker="●"
         local rt; rt="$(reltime "$activity")"
@@ -79,7 +89,7 @@ picker() {
     if [[ "$picked" == "__NEW__" ]]; then
         exec superclaude new
     fi
-    exec tmux attach-session -t "=$picked"
+    attach_or_switch "$picked"
 }
 
 case "${1:-}" in
