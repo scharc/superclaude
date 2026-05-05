@@ -9,6 +9,16 @@ SESSION_PREFIX="sc"
 
 # --- helpers ---
 
+attach_or_switch() {
+    # switch-client when inside tmux (e.g. invoked from display-popup),
+    # attach-session otherwise.
+    if [[ -n "${TMUX:-}" ]]; then
+        exec tmux switch-client -t "=$1"
+    else
+        exec tmux attach-session -t "=$1"
+    fi
+}
+
 slug() {
     local path="${1:-$(pwd)}"
     echo "${SESSION_PREFIX}|${path}"
@@ -98,7 +108,7 @@ pick_and_attach_all() {
     )" || selected=""
 
     if [[ -n "$selected" ]]; then
-        exec tmux attach-session -t "=$selected"
+        attach_or_switch "$selected"
     fi
 }
 
@@ -106,7 +116,7 @@ create_and_attach() {
     local session_name="$1"
     tmux new-session -d -s "$session_name" -c "$(pwd)" "$CLAUDE_CMD"
     echo "Created session: $session_name"
-    exec tmux attach-session -t "=$session_name"
+    attach_or_switch "$session_name"
 }
 
 # --- main ---
@@ -117,7 +127,7 @@ case "${1:-}" in
         existing="$(list_sessions | head -1)"
         if [[ -n "$existing" ]]; then
             echo "Attaching to: $existing"
-            exec tmux attach-session -t "=$existing"
+            attach_or_switch "$existing"
         else
             create_and_attach "$(slug)"
         fi
@@ -144,7 +154,7 @@ case "${1:-}" in
             echo "Usage: superclaude attach SESSION_NAME"
             exit 1
         fi
-        exec tmux attach-session -t "=$2"
+        attach_or_switch "$2"
         ;;
     kill)
         if [[ -z "${2:-}" ]]; then
