@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# scd - `sc`, but on the desktop node over mosh.
+# Same UX as the local `sc` picker, except it runs on the desktop
+# (desktop.marc.zkm.de / zkm-gpu) so you pick from *its* sc sessions.
+#   scd        -> fzf picker over the desktop's sc sessions
+#   scd n      -> create a new session on the desktop
+#   scd <N>    -> attach the N-th desktop session (most-recent first)
+# Args are passed straight through to the remote `sc`.
+set -euo pipefail
+
+DEST="scharc@desktop.marc.zkm.de"
+
+# Mirror the interactive `mosh` wrapper: run mosh-server under the user's
+# systemd scope on the remote (cgroup-clean, survives shell teardown).
+exec mosh \
+    --server='systemd-run --user --scope --collect mosh-server' \
+    "$DEST" -- \
+    zsh -lc 'sc "$@"' sc "$@"

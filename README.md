@@ -4,10 +4,11 @@ Claude Code with tmux session management. One sticky session per project,
 plus a touch-friendly picker that drops into a tmux popup so you can
 switch sessions from a phone without chording `prefix` keys.
 
-Two scripts:
+Three scripts:
 
 - **`superclaude`** — full CLI: create / list / attach / kill named tmux sessions running `claude`. Session names are derived from `$PWD` so each project gets its own sticky session. `superclaude list all` opens an `fzf` picker over every session.
 - **`sc`** — short, mobile-friendly wrapper around the same session pool. `sc` opens an `fzf` picker filling the screen, with "+ new session" pinned at the top. `sc n` creates new, `sc <N>` attaches by row index. Pairs with [`sc.tmux`](#tmux-integration) for one-tap session switching from inside tmux.
+- **`scd`** — `sc`, but on the desktop node over `mosh`. Runs the remote `sc` on `desktop.marc.zkm.de` so you pick from *its* session pool, with mosh's roaming/reconnect for flaky links. Same arg surface as `sc` (`scd`, `scd n`, `scd <N>`). Client-side only — install it wherever you *initiate* from (laptop/phone), not on the desktop itself.
 
 ## Install
 
@@ -15,6 +16,7 @@ Two scripts:
 git clone git@github.com:scharc/superclaude.git
 ln -s "$PWD/superclaude/bin/superclaude" ~/.local/bin/superclaude
 ln -s "$PWD/superclaude/bin/sc"          ~/.local/bin/sc
+ln -s "$PWD/superclaude/bin/scd"         ~/.local/bin/scd   # optional: remote-to-desktop
 ```
 
 Requires `tmux`, `fzf`, and `claude` (Claude Code CLI) on `$PATH`.
@@ -32,6 +34,10 @@ superclaude kill NAME    kill a specific session
 sc                       fzf picker over ALL sc sessions, "+ new" at top
 sc n                     new session in $PWD
 sc <N>                   attach to row N (most-recent first)
+
+scd                      sc picker on the desktop node (over mosh)
+scd n                    new session on the desktop
+scd <N>                  attach the desktop's row N
 ```
 
 The picker shows `idx ●/· age  title  ·  dir` per row — `●` = attached, `·` = idle.
