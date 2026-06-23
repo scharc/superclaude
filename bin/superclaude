@@ -21,6 +21,10 @@ attach_or_switch() {
 
 slug() {
     local path="${1:-$(pwd)}"
+    # tmux rewrites '.' and ':' to '_' in session names (they're reserved in
+    # target specs as window.pane / session:window separators). Mirror that so
+    # the name we create matches the name we later attach to.
+    path="${path//[.:]/_}"
     echo "${SESSION_PREFIX}|${path}"
 }
 
