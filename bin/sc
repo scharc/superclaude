@@ -8,18 +8,24 @@ set -euo pipefail
 
 SESSION_PREFIX="sc"
 
+# Share Codeman's dedicated tmux socket (see bin/superclaude for rationale).
+SC_TMUX_SOCKET="${SC_TMUX_SOCKET:-${CODEMAN_TMUX_SOCKET:-codeman${CODEMAN_INSTANCE:+-${CODEMAN_INSTANCE}}}}"
+tm() { tmux -L "$SC_TMUX_SOCKET" "$@"; }
+
 attach_or_switch() {
     # switch-client when inside tmux (e.g. invoked from display-popup),
     # attach-session otherwise.
+    # NB: use `exec tmux -L …` directly, not the `tm` function — `exec` replaces
+    # the shell with an external command and cannot exec a shell function.
     if [[ -n "${TMUX:-}" ]]; then
-        exec tmux switch-client -t "=$1"
+        exec tmux -L "$SC_TMUX_SOCKET" switch-client -t "=$1"
     else
-        exec tmux attach-session -t "=$1"
+        exec tmux -L "$SC_TMUX_SOCKET" attach-session -t "=$1"
     fi
 }
 
 list_rows() {
-    tmux list-panes -a \
+    tm list-panes -a \
         -F $'#{session_name}\t#{pane_active}\t#{session_attached}\t#{session_activity}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_title}' \
         2>/dev/null \
         | awk -F'\t' -v p="^${SESSION_PREFIX}[|]" '$1 ~ p && $2=="1" && !seen[$1]++' \

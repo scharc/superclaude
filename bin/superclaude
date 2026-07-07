@@ -7,15 +7,28 @@ set -euo pipefail
 CLAUDE_CMD="claude --dangerously-skip-permissions"
 SESSION_PREFIX="sc"
 
+# Share Codeman's dedicated tmux socket so sessions created here are visible in
+# Codeman's web UI (and Codeman-created sessions are visible to `sc`). Codeman
+# runs `tmux -L codeman` by default; mirror its own socket resolution so we stay
+# aligned even under CODEMAN_INSTANCE. Precedence: SC_TMUX_SOCKET override wins,
+# else CODEMAN_TMUX_SOCKET, else codeman[-<CODEMAN_INSTANCE>].
+SC_TMUX_SOCKET="${SC_TMUX_SOCKET:-${CODEMAN_TMUX_SOCKET:-codeman${CODEMAN_INSTANCE:+-${CODEMAN_INSTANCE}}}}"
+
+# All tmux calls go through the shared socket. (switch-client still respects the
+# current $TMUX when invoked from inside a session on this same socket.)
+tm() { tmux -L "$SC_TMUX_SOCKET" "$@"; }
+
 # --- helpers ---
 
 attach_or_switch() {
     # switch-client when inside tmux (e.g. invoked from display-popup),
     # attach-session otherwise.
+    # NB: use `exec tmux -L …` directly, not the `tm` function — `exec` replaces
+    # the shell with an external command and cannot exec a shell function.
     if [[ -n "${TMUX:-}" ]]; then
-        exec tmux switch-client -t "=$1"
+        exec tmux -L "$SC_TMUX_SOCKET" switch-client -t "=$1"
     else
-        exec tmux attach-session -t "=$1"
+        exec tmux -L "$SC_TMUX_SOCKET" attach-session -t "=$1"
     fi
 }
 
@@ -31,7 +44,7 @@ slug() {
 list_sessions() {
     local base_name
     base_name="$(slug)"
-    tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -x "${base_name}\(-[0-9]\+\)\?" || true
+    tm list-sessions -F '#{session_name}' 2>/dev/null | grep -x "${base_name}\(-[0-9]\+\)\?" || true
 }
 
 next_session_name() {
@@ -76,7 +89,7 @@ pick_and_attach_all() {
     # pane_title carries Claude Code's conversation summary; pane_current_path is the
     # real cwd (more accurate than parsing the -N suffix off the slug).
     local rows
-    rows="$(tmux list-panes -a \
+    rows="$(tm list-panes -a \
         -F $'#{session_name}\t#{pane_active}\t#{session_attached}\t#{session_activity}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_title}' \
         2>/dev/null \
         | awk -F'\t' -v p="^${SESSION_PREFIX}\\|" '$1 ~ p && $2=="1" && !seen[$1]++' \
@@ -118,7 +131,7 @@ pick_and_attach_all() {
 
 create_and_attach() {
     local session_name="$1"
-    tmux new-session -d -s "$session_name" -c "$(pwd)" "$CLAUDE_CMD"
+    tm new-session -d -s "$session_name" -c "$(pwd)" "$CLAUDE_CMD"
     echo "Created session: $session_name"
     attach_or_switch "$session_name"
 }
@@ -165,7 +178,7 @@ case "${1:-}" in
             echo "Usage: superclaude kill SESSION_NAME"
             exit 1
         fi
-        tmux kill-session -t "=$2"
+        tm kill-session -t "=$2"
         echo "Killed session: $2"
         ;;
     help|--help|-h)
